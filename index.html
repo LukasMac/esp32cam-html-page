@@ -1,0 +1,192 @@
+<!-- <!DOCTYPE html>
+<html>
+  <head>
+    <title>My Website</title>
+  </head>
+  <body>
+    <h1>Welcome to my website!</h1>
+    <p>This is a simple website.</p>
+    <button id="pair">Pair</button>
+    <img id="image" alt="Received Image" />
+    <script>
+      const SERVICE_UUID = "ab0828b1-198e-4351-b779-901fa0e0371e";
+      const MESSAGE_CHARACTERISTIC_UUID =
+        "4ac8a682-9736-4e5d-932b-e9b31405049c";
+
+      let chunks = [];
+
+      // on Pair button click event
+      document.getElementById("pair").addEventListener("click", async () => {
+        let device;
+        try {
+          device = await navigator.bluetooth.requestDevice({
+            filters: [{ name: "BLETest" }],
+            optionalServices: [SERVICE_UUID],
+          });
+          console.log("Device paired successfully!", device);
+        } catch (error) {
+          console.error("Error pairing device:", error);
+        }
+
+        if (device) {
+          const server = await device.gatt.connect();
+
+          const service = await server.getPrimaryService(SERVICE_UUID);
+          console.log("Service", service);
+
+          const characteristic = await service.getCharacteristic(
+            MESSAGE_CHARACTERISTIC_UUID
+          );
+          console.log("Characteristic", characteristic);
+
+          const notifications = await characteristic.startNotifications();
+          await characteristic.startNotifications();
+          characteristic.addEventListener(
+            "characteristicvaluechanged",
+            (event) => {
+              const value = event.target.value;
+              const chunk = new Uint8Array(value.buffer);
+              chunks.push(chunk);
+              console.log("Received chunk", chunk);
+
+              // Assuming the end of transmission is determined by some condition
+              if (value.byteLength < 10) {
+                const totalLength = chunks.reduce(
+                  (acc, chunk) => acc + chunk.length,
+                  0
+                );
+                const fullArray = new Uint8Array(totalLength);
+                let offset = 0;
+                chunks.forEach((chunk) => {
+                  fullArray.set(chunk, offset);
+                  offset += chunk.length;
+                });
+
+                const base64String = btoa(
+                  String.fromCharCode.apply(null, fullArray)
+                );
+                console.log("Base64 Encoded String:", base64String);
+
+                const blob = new Blob([fullArray], { type: "image/jpeg" });
+                console.log("Blob created", fullArray);
+                const url = URL.createObjectURL(blob);
+                console.log("url", url);
+                document.getElementById("image").src = url;
+                console.log("Image displayed");
+              }
+            }
+          );
+
+          const readValue = await characteristic.readValue();
+
+          // const encoder = new TextEncoder();
+          // const value = encoder.encode("Hello, BLE!");
+          // await characteristic.writeValue(value);
+        }
+      });
+
+      async function init() {}
+
+      init();
+    </script>
+  </body>
+</html> -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>BLE Image Receiver</title>
+  </head>
+  <body>
+    <button id="connect">Connect to BLE Device</button>
+    <div>
+      Chunk Size:
+      <input type="text" id="chunkSize" placeholder="Chunk Size" value="500" />
+      Delay:
+      <input type="text" id="delay" placeholder="Delay" value="50" />
+    </div>
+    <canvas id="canvas"></canvas>
+    <script>
+      let imageData = [];
+      let imageLength = 0;
+      let chunkSize = 500;
+
+      async function connectToDevice() {
+        try {
+          const device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: ["ab0828b1-198e-4351-b779-901fa0e0371e"] }],
+          });
+
+          const server = await device.gatt.connect();
+          const service = await server.getPrimaryService(
+            "ab0828b1-198e-4351-b779-901fa0e0371e"
+          );
+          const characteristic = await service.getCharacteristic(
+            "4ac8a682-9736-4e5d-932b-e9b31405049c"
+          );
+
+          console.log("Connected to BLE device");
+
+          await characteristic.startNotifications();
+          characteristic.addEventListener(
+            "characteristicvaluechanged",
+            handleCharacteristicValueChanged
+          );
+
+          chunkSize = document.getElementById("chunkSize").value;
+          const delay = document.getElementById("delay").value;
+          const valueString = `${chunkSize},${delay}`;
+          const encoder = new TextEncoder();
+          const value = encoder.encode(valueString);
+
+          try {
+            await characteristic.writeValue(value);
+            console.log("Value written to characteristic:", valueString);
+          } catch (error) {
+            console.error("Failed to write value to characteristic", error);
+          }
+
+          const readValue = await characteristic.readValue();
+        } catch (error) {
+          console.error("Failed to connect to BLE device", error);
+        }
+      }
+
+      function handleCharacteristicValueChanged(event) {
+        const value = event.target.value;
+        const chunk = new Uint8Array(value.buffer);
+
+        // Append the chunk to the image data array
+        imageData.push(chunk);
+        imageLength += chunk.length;
+        console.log("Received chunk", chunk.length);
+
+        // Check if the chunk indicates the end of the image
+        if (chunk.length !== parseInt(chunkSize)) {
+          // Convert the concatenated data to a Blob
+          const blob = new Blob([...imageData], { type: "image/jpeg" });
+
+          // Create an object URL for the Blob
+          const url = URL.createObjectURL(blob);
+
+          const canvas = document.getElementById("canvas");
+          const ctx = canvas.getContext("2d");
+          const img = new Image();
+          img.onload = function () {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+          };
+          img.src = url;
+
+          // Reset the image data array
+          imageData = [];
+          imageLength = 0;
+        }
+      }
+
+      document
+        .getElementById("connect")
+        .addEventListener("click", connectToDevice);
+    </script>
+  </body>
+</html>

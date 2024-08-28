@@ -1,0 +1,48 @@
+<html>
+  <head>
+    <title>My Website</title>
+  </head>
+  <body>
+    <h1>Welcome to my website!</h1>
+    <p>This is a simple website.</p>
+    <button id="send">Stream</button>
+    <img id="image" alt="Received Image" />
+    <script>
+      // const socket = new WebSocket("ws://192.168.86.31:81");
+      let stream = false;
+      const socket = new WebSocket("ws://192.168.4.1:81");
+
+      socket.onopen = function (event) {
+        console.log("WebSocket is open now.");
+      };
+
+      socket.onmessage = function (event) {
+        console.log("WebSocket message received:", event.data);
+        // Assuming the received data is a binary JPEG buffer
+        const arrayBuffer = event.data;
+        const blob = new Blob([arrayBuffer], { type: "image/jpeg" });
+        const url = URL.createObjectURL(blob);
+        document.getElementById("image").src = url;
+        if (stream) socket.send("AAA");
+      };
+
+      socket.onclose = function (event) {
+        console.log("WebSocket is closed now.");
+      };
+
+      socket.onerror = function (error) {
+        console.error("WebSocket error observed:", error);
+      };
+      document.getElementById("send").addEventListener("click", function () {
+        if (socket.readyState != 1) {
+          return;
+        }
+
+        stream = !stream;
+        if (stream) {
+          socket.send("AAA");
+        }
+      });
+    </script>
+  </body>
+</html>
